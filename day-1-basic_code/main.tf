@@ -28,13 +28,74 @@ resource "azurerm_subnet" "private_subnet" {
   address_prefixes     = ["10.0.1.0/24"]
 }
 
+# Create a network security group
+resource "azurerm_network_security_group" "nsg" {
+  name                = "public-nsg"
+  location            = azurerm_resource_group.RG.location
+  resource_group_name = azurerm_resource_group.RG.name
+
+  security_rule {
+    name                       = "Allow-SSH"
+    priority                   = 1000
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "Allow-HTTP"
+    priority                   = 1010
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "Allow-All"
+    priority                   = 1100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "Deny-All"
+    priority                   = 4096
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+# Associate NSG with the public subnet
+resource "azurerm_subnet_network_security_group_association" "subnet_nsg" {
+  subnet_id                 = azurerm_subnet.subnet.id
+  network_security_group_id = azurerm_network_security_group.nsg.id
+}
+
 # Create a public IP address
 resource "azurerm_public_ip" "public_ip" {
   name                = "public-ip"
   location            = azurerm_resource_group.RG.location
   resource_group_name = azurerm_resource_group.RG.name
-  sku                 = "Basic" 
-  allocation_method   = "Static" 
+  sku                 = "Basic"
+  allocation_method   = "Static"
 }
 
 # Create a network interface
@@ -59,12 +120,6 @@ resource "azurerm_virtual_machine" "main" {
   network_interface_ids = [azurerm_network_interface.nic.id]
   vm_size               = "Standard_D1"
 
-  # Uncomment this line to delete the OS disk automatically when deleting the VM
-  # delete_os_disk_on_termination = true
-
-  # Uncomment this line to delete the data disks automatically when deleting the VM
-  # delete_data_disks_on_termination = true
-
   storage_image_reference {
     publisher = "Canonical"
     offer     = "0001-com-ubuntu-server-jammy"
@@ -80,7 +135,7 @@ resource "azurerm_virtual_machine" "main" {
   }
 
   os_profile {
-    computer_name  = "vm"  # Changed to lowercase for consistency
+    computer_name  = "vm"
     admin_username = var.admin_username
     admin_password = var.admin_password
   }
